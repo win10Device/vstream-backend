@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net7.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Description>This package provides common helper classes and utilities for LiveStreamingServerNet.</Description>
+    <PackageTags>live-streaming</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="$(SolutionDir)nuget\nuget-package.props" />
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+    <InternalsVisibleTo Include="LiveStreamingServerNet.Utilities.Test" />
+  </ItemGroup>
+
+</Project>

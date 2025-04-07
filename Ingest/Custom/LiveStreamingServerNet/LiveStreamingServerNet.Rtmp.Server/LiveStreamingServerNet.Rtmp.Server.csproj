@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net7.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Description>This package provides the implementation of RTMP server.</Description>
+    <PackageTags>live-streaming;rtmp</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="$(SolutionDir)nuget\nuget-package.props" />
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+    <InternalsVisibleTo Include="LiveStreamingServerNet.Rtmp.Server.Test" />
+    <InternalsVisibleTo Include="LiveStreamingServerNet.Rtmp.Relay.Test" />
+    <InternalsVisibleTo Include="LiveStreamingServerNet.Rtmp.Relay" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiveStreamingServerNet.Networking.Server\LiveStreamingServerNet.Networking.Server.csproj" />
+    <ProjectReference Include="..\LiveStreamingServerNet.Rtmp\LiveStreamingServerNet.Rtmp.csproj" />
+  </ItemGroup>
+
+</Project>

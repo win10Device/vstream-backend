@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net7.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Description>This package provides shared components and utilities for TCP server and client implementations.</Description>
+    <PackageTags>live-streaming;tcp</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="$(SolutionDir)nuget\nuget-package.props" />
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+    <InternalsVisibleTo Include="LiveStreamingServerNet.Networking.Server" />
+    <InternalsVisibleTo Include="LiveStreamingServerNet.Networking.Client" />
+    <InternalsVisibleTo Include="LiveStreamingServerNet.Networking.Test" />
+    <InternalsVisibleTo Include="LiveStreamingServerNet.Networking.Server.Test" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiveStreamingServerNet.Utilities\LiveStreamingServerNet.Utilities.csproj" />
+  </ItemGroup>
+
+</Project>

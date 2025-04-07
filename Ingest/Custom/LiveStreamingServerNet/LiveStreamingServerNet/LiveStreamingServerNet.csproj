@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net7.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Description>LiveStreamingServerNet is a .NET library for building custom RTMP live streaming servers.</Description>
+    <PackageTags>live-streaming;rtmp;flv;http-flv;websocket-flv;hls</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="$(SolutionDir)nuget\nuget-package.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiveStreamingServerNet.Rtmp.Server\LiveStreamingServerNet.Rtmp.Server.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+</Project>

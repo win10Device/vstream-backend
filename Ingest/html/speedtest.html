@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Speed test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <style>
+                .line {
+                    content: "";
+                    display: block;
+                    border-left: 1px solid;
+                    overflow: hidden;
+                    /* height: 100vh; */
+                    /* margin-top: 10px; */
+                    /* position: absolute; */
+                }
+
+                ul {
+                    list-style: none;
+                    margin-left: -30px;
+                }
+
+                li {
+                    display: inline-block;
+                    /* position:inherit; */
+                    /* margin-right: 10px; / * add spacing between items */
+                }
+
+                .line-text {
+                    transform: rotate(45deg);
+                    width: 0;
+                }
+
+                    .line-text > p {
+                        /*padding-top: 0px;*/
+                        margin-top: 0px;
+                        padding-left: -1px;
+                        font-size: 10px;
+                    }
+
+                    .line-text:hover > p {
+                        /*  margin-top: -10px;
+          padding-top: 60px;
+          margin-left: -10px;
+          font-size:30px;
+        */
+                        font-weight: bold;
+                        background-color: #fff;
+                        cursor: pointer;
+                    }
+
+                .aaa {
+                    color: green;
+                }
+
+                .cannot {
+                    color: red;
+                    font-weight:
+                }
+    </style>
+</head>
+<body>
+    <div class="container">
+        Select file to upload:
+        <input type="file" name="fileToUploadNep" style="display:block" id="input">
+        <!-- input type='submit' value='submit' -->
+        <button onclick="UploadTestFile()">Submit</button>
+        <div class="pt-5">
+            <div class="progress" role="progressbar" aria-label="Basic example" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-bar w-0" id="progressbar"></div>
+            </div>
+            <ul>
+                <li>
+                    <div class="line" style="height:30px"></div>
+                    <div class="line-text"><p id="text0">Unusable</p></div>
+                </li>
+                <li style="margin-left:1.3%;">
+                    <div class="line" style="height:30px"></div>
+                    <div class="line-text"><p id="text1">360p@30</p></div>
+                </li>
+                <li style="margin-left:0.55%;">
+                    <div class="line" style="height:30px"></div>
+                    <div class="line-text"><p id="text2">360p@60</p></div>
+                </li>
+                <li style="margin-left:1.55%;">
+                    <div class="line" style="height:30px"></div>
+                    <div class="line-text"><p id="text3">480p@30</p></div>
+                </li>
+                <li style="margin-left:2.55%;">
+                    <div class="line" style="height:30px"></div>
+                    <div class="line-text"><p id="text4">480p@60</p></div>
+                </li>
+                <li style="margin-left:1.55%;">
+                    <div class="line" style="height:30px"></div>
+                    <div class="line-text"><p id="text5">720p@30</p></div>
+                </li>
+                <li style="margin-left:4.55%;">
+                    <div class="line" style="height:30px"></div>
+                    <div class="line-text"><p id="text6">720p@60</p></div>
+                </li>
+                <li style="margin-left:0.55%;">
+                    <div class="line" style="height:30px"></div>
+                    <div class="line-text"><p id="text7">1080p@30</p></div>
+                </li>
+                <li style="margin-left:7.55%;">
+                    <div class="line" style="height:30px"></div>
+                    <div class="line-text"><p id="text8">1080p@60</p></div>
+                </li>
+            </ul>
+
+        </div>
+        <script>
+            UpdateProgress(0)
+            var oldBytes = 0;
+            function formatBytes(bytes, decimals = 2) {
+                if (!+bytes) return '0 Bytes'
+                const k = 1024
+                const dm = decimals < 0 ? 0 : decimals
+                const sizes = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB']
+                const i = Math.floor(Math.log(bytes) / Math.log(k))
+                UpdateProgress((((bytes / 5e+7) * 100) + oldBytes) / 2);
+                oldBytes = (bytes / 5e+7) * 100;
+                oldBytes = (oldBytes >= 100) ? 100 : oldBytes;
+
+                const w = `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+                document.getElementById("progressbar").innerText = w;
+                return w;
+            }
+            function UpdateProgress(value) {
+                document.getElementById("progressbar").className = `progress-bar`;
+                document.getElementById("progressbar").style.width = `${value}%`;
+                if (value >= 24 && value <= 100) document.getElementById("text8").className = "aaa"; else document.getElementById("text8").className = "";
+                if (value >= 16 && value <= 23.9) document.getElementById("text7").className = "aaa"; else document.getElementById("text7").className = "";
+                if (value >= 15 && value <= 15.9) document.getElementById("text6").className = "aaa"; else document.getElementById("text6").className = "";
+                if (value >= 10 && value <= 14.9) document.getElementById("text5").className = "aaa"; else document.getElementById("text5").className = "";
+                if (value >= 8 && value <= 9.9) document.getElementById("text4").className = "aaa"; else document.getElementById("text4").className = "";
+                if (value >= 5 && value <= 7.9) document.getElementById("text3").className = "aaa"; else document.getElementById("text3").className = "";
+                if (value >= 3 && value <= 4) document.getElementById("text2").className = "aaa"; else document.getElementById("text2").className = "";
+                if (value >= 2 && value <= 2.9) document.getElementById("text1").className = "aaa"; else document.getElementById("text1").className = "";
+                //        if (value >= 0 && value <= 1.9) document.getElementById("text0").className = "aaa"; else document.getElementById("text1").className = "";
+
+
+
+
+            }
+            function UploadTestFile() {
+                var http = new XMLHttpRequest();
+                var startTime, endTime;
+                const selectedFile = document.getElementById("input").files[0];
+                var chunk = 0;
+                var timestamp = new Date().getTime();
+                console.log(selectedFile);
+                var binaryString = "";
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                    // binary data
+                    var data = reader.result;
+                    var array = new Int8Array(data);
+                    binaryString = array;
+                    console.log(e.target.result);
+                    http.upload.addEventListener('progress', function (e) {
+                        if (e.lengthComputable) {
+                            // bytes transferred since last update
+                            bytes = e.loaded - chunk;
+                            chunk = e.loaded;
+                            // Get number of seconds since last update
+                            ms = new Date().getTime();
+                            elapsed = (ms - timestamp) / 1000.0
+                            timestamp = ms;
+                            // Divide by elapsed time to get bytes per second
+                            bps = bytes / elapsed;
+                            // Output upload speed
+                            console.log("Speed: " + formatBytes(bps) + "/s");
+                        }
+                    }, false);
+                    http.open("POST", "/test/", true);
+                    http.setRequestHeader("Content-Type", "application/x-www-form-urlencoded", "Access-Control-Allow-Origin", "*", "Content-Length", binaryString.length);
+                    http.send(binaryString);
+                };
+                reader.readAsArrayBuffer(selectedFile);
+                //  var binaryString;
+            }
+        </script>
+</body>
+</html>

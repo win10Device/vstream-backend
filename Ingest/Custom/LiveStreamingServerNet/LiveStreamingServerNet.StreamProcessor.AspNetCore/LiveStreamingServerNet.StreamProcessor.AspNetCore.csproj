@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net7.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Description>This package provides the functionality to serve of HLS streams via ASP.NET Core.</Description>
+    <PackageTags>live-streaming;rtmp;transmuxer;transcoder;hls</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="$(SolutionDir)nuget\nuget-package.props" />
+  
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiveStreamingServerNet.StreamProcessor\LiveStreamingServerNet.StreamProcessor.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,29 @@
+[req]
+# Options for the `req` tool (`man req`).
+default_bits        = 4096
+distinguished_name  = req_distinguished_name
+string_mask         = utf8only
+default_md          = sha512
+req_extensions      = req_ext
+
+[req_distinguished_name]
+C = AU
+C_default = AU
+O = RanROM Project
+O_default = RanROM Project
+CN = RanROM VTubersTV CA
+CN_default = RanROM VTubersTV CA
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = 192.168.0.40
+DNS.1 = api.ranrom.net
+DNS.2 = *.vtubers.tv
+
+[ v3_req ]
+subjectKeyIdentifier = hash
+#authorityKeyIdentifier = keyid:always,issuer
+basicConstraints = critical, CA:true
+keyUsage = critical, digitalSignature, cRLSign, keyCertSign
+extendedKeyUsage = serverAuth, clientAuth

@@ -1,0 +1,53 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="C:\Users\Soapier\.nuget\packages\system.diagnostics.diagnosticsource\9.0.2\contentFiles\any\net8.0\ILLink\ILLink.Descriptors.LibraryBuild.xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AspNetCore.Proxy" Version="4.5.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Physical" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Primitives" Version="9.0.2" />
+    <PackageReference Include="mtanksl.ActionMessageFormat" Version="1.0.4" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="9.0.2" />
+    <PackageReference Include="System.Diagnostics.EventLog" Version="9.0.2" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="html\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="html\speedtest.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
