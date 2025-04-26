@@ -1,27 +1,61 @@
-/*
---- NOTE ---
-The main database is moving away from supabase
-*/
 const config = require('./config.json');
 const { exec, execSync } = require('child_process');
-const { createClient: sbClient } = require('@supabase/supabase-js')
+const mongoose = require('mongoose');
 const { createCluster, createClient } = require('redis');
 const crypto = require('node:crypto');
 const { cpus } = require('os');
+const users = require('./users.js').init(`${config.mongo.url}/${config.mongo.main}`);
+const vstream = require('./streams.js').init(`${config.mongo.url}/${config.mongo.vstream}`);
 //var https = require('https'); //Temp
 var http = require('http');
 var cluster = require('cluster');
-
-const supabase = sbClient(config.supabase.url, config.supabase.key);
 const client = createClient();
-
 client.on('error', err => console.log('Redis Client Error', err));
-
-var pending = new Map();
-
+client.on('connect', () => {
+    console.log('Connected to Redis...');
+});
 (async () => {
   await client.connect();
 })();
+if (cluster.isPrimary) {
+  users.watch().on('change', async (data) => {
+    console.log(data);
+    const updatedData = data.updateDescription.updatedFields;
+    var deleteEntry = false;
+    var match = false;
+    Object.keys(updatedData).forEach((key) => {
+      if (['banReason','deletedAt'].includes(key)) {
+        deleteEntry = true;
+        match = true;
+      }
+      if (['username','displayName','canStream','avatar'].includes(key)) {
+        match = true;
+      }
+    });
+    if (match) {
+      var key = `users:byId:${data.documentKey._id.toString()}`;
+      if (await client.exists(key)) {
+        if (deleteEntry) {
+          client.del(key);
+          console.log(`Cache for "${data.documentKey._id.toString()}" was removed because the account was flagged as deleted or banned`);
+        } else {
+          var j = JSON.parse(await client.get(key));
+          Object.keys(j).forEach(async (k) => {
+            if (updatedData.hasOwnProperty(k)) {
+              console.log(`Updating user ${data.documentKey._id.toString()}, changing "${j[k]}" to "${updatedData[k]}"`); //temp
+              j[k] = updatedData[k];
+              if (k === 'username') await client.set(`users:byName:${j.id}`, j.username);
+            }
+          })
+          client.set(key, JSON.stringify(j)); // Not an effective way to store JSON in reds
+          client.publish(`user_update:${j.id}`, "_");
+        }
+      }
+    }
+  });
+}
+
+var pending = new Map();
 
 const sleepUntil = async (id, timeoutMs) => {
   return new Promise((resolve, reject) => {
@@ -37,6 +71,30 @@ const sleepUntil = async (id, timeoutMs) => {
       }
     }, 20);
   });
+}
+
+async function getUserByName(name) {
+  var id = await client.get(`users:byName:${name}`);
+  if (id) {
+    var x = await client.get(`users:byId:${id}`);
+    return JSON.parse(x);
+  } else {
+    var user = (await users.findOne({ 'username': name }));
+    if (user) {
+      user = user.toJSON();
+      user.id = user._id.toString()
+      delete user._id;
+      await client.multi()
+            .set(`users:byName:${user.username}`, `${user.id}`)
+            .set(`users:byId:${user.id}`, JSON.stringify(user)) //Not an effective way to store JSON in redis
+            .expire(`users:byName:${user.username}`, 6000)
+            .expire(`users:byId:${user.id}`, 6000)
+            .execAsPipeline()
+            .then((results) => { console.log(results) });
+      return user;
+    }
+  }
+  return null;
 }
 
 function base64UrlEncode(obj) {
@@ -72,8 +130,9 @@ function VerifyHMAC(str, signature, secret) {
 }
 // This is NOT for user auth
 async function HandleAuth(req) {
+  return { auth: true, client: "test" }; //TEST ONLY!
   try {
-    if (req.headers.hasOwnProperty('authorization')) {
+/*    if (req.headers.hasOwnProperty('authorization')) {
       var header = req.headers['authorization'];
       var part = header.split(' ');
       if (part.length == 2 && ['ingest', 'relays', 'service'].includes(part[0])) {
@@ -83,7 +142,7 @@ async function HandleAuth(req) {
            Wait for object to be removed from Map
            This is because calling the database takes time for a token that's not been cached,
            so if the client calls the endpoint again before it's finished processing, this ensures it waits
-        */
+        * /
         if (pending.has(`${part[0]}_${server_id}`))
           await sleepUntil(`${part[0]}_${server_id}`, 5000);
         var value = await client.get(`aa:${part[0]}_${server_id}`);
@@ -109,7 +168,7 @@ async function HandleAuth(req) {
           pending.delete(`${part[0]}_${server_id}`);
         }
       }
-    }
+    }*/
     return { auth: false, client: null } //If nothing else returns, fail
   } catch (e) {
     console.log(e);
@@ -122,29 +181,22 @@ async function QueryStreamer(res, url) {
   var stream = await client.get(`ab:${val}`);
   if (stream) {
     var endpoint = JSON.parse(stream).endpoint;
-    if (endpoint) {
+    if (endpoint.hls) {
       res.setHeader('Content-Type', 'application/json');
       res.write(stream);
       return;
     }
   } else {
-    const {data, error} = await supabase
-        .from('users')
-        .select()
-        .eq('username', val)
-        .maybeSingle();
-    if (data != null) {
-      if (data.can_stream) {
-        const {data: meta, error} = await supabase
-          .from('streams')
-          .select()
-          .eq('user_id', data.id)
-          .maybeSingle();
-        if (meta != null) {
-          delete meta.key; //Prevent the key from ever showing in either the cache or the response
-          client.set(`ab:${data.username}`, JSON.stringify(meta)); //Not an effective way to store JSON in redis
-          client.expire(`ab:${data.username}`, 600); //10 minutes
-          if (meta.endpoint) {
+    var user = await getUserByName(val);
+    if (user) {
+      if (user.canStream) {
+        var meta = (await vstream.findOne({ 'user_id': user.id }));
+        if (meta) {
+          meta = meta.toJSON();
+          delete meta.stream_key; //Prevent the key from ever showing in either the cache or the response
+          if (meta.endpoint.hls != "") {
+            client.set(`ab:${user.username}`, JSON.stringify(meta)); //Not an effective way to store JSON in redis
+            client.expire(`ab:${user.username}`, 600); //10 minutes
             res.setHeader('Content-Type', 'application/json');
             res.write(JSON.stringify(meta));
             return;
