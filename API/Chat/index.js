@@ -8,7 +8,7 @@ const { exec, execSync } = require('child_process');
 const { createCluster, createClient } = require('redis');
 const crypto = require('node:crypto');
 const { cpus } = require('os');
-const { WebSocketServer } = require('ws');
+const { WebSocket, WebSocketServer } = require('ws');
 const mongoose = require('mongoose');
 const users = require('./users.js').init(`${config.mongo.url}/${config.mongo.main}`);
 //const vstream = require('./streams.js').init(`${config.mongo.url}/${config.mongo.vstream}`);
@@ -56,7 +56,6 @@ const token = helix.generateToken({
   exp: Date.now() + 3600000
 });
 //const decoded = Helix.decodeToken(token);
-console.log(token);
 //console.log(decoded);
 
 
@@ -87,42 +86,52 @@ function MessageObject(msg, color, flags) {
 }
 
 async function GetUserById(id) {
-  var x = await client.get(`users:byId:${id}`);
-  if (x) {
-    return JSON.parse(x);
-  } else {
-    var user = (await users.findById(id));
-    if (user) {
-      user = user.toJSON();
-      user.id = user._id.toString()
-      delete user._id;
-      await client.multi()
+  try {
+    var x = await client.get(`users:byId:${id}`);
+    if (x) {
+      return JSON.parse(x);
+    } else {
+      var user = (await users.findById(id));
+      if (user) {
+        user = user.toJSON();
+        user.id = user._id.toString()
+        delete user._id;
+        await client.multi()
             .set(`users:byName:${user.username}`, `${user.id}`)
             .set(`users:byId:${user.id}`, JSON.stringify(user)) //Not an effective way to store JSON in redis
             .expire(`users:byName:${user.username}`, 6000)
             .expire(`users:byId:${user.id}`, 6000)
             .execAsPipeline()
             .then((results) => { console.log(results) });
-      return user;
+        return user;
+      }
     }
+  } catch (e) {
+    // NO-OP
+console.log(e);
   }
   return null;
 }
-async function GetUserData(id) {
+async function GetUserData(ws, id) {
   var user = await GetUserById(id);
   if (user) {
-    var flags = 0b00000000;
-    if (user.canStream) flags = setBit(flags, 1)
+    var flags = 0;
+    if (user.canStream) flags = setBit(flags, 1);
+    if (typeof(ws.user) !== 'undefined') {
+      if (ws.creator.id === ws.user.id) flags = setBit(flags, 3)
+    }
     return {
+      type: 1,
       id: user.id,
       username: user.username,
       global_name: user.displayName,
       avatar: user.avatar,
+      badges: [],
       flags
     };
   } else return null;
 }
-/*const numCPUs = cpus().length;
+const numCPUs = cpus().length;
 if (cluster.isPrimary) {
   console.log(`Primary ${process.pid} is running`);
 
@@ -135,7 +144,7 @@ if (cluster.isPrimary) {
     console.log(`Worker ${worker.process.pid} died`);
     cluster.fork(); // Restart worker
   });
-} else {*/
+} else {
   var ListOfConnections = new Map();
   const wss = new WebSocketServer({ port: 8083 });
   wss.on('connection', async function connection(ws, req) {
@@ -147,13 +156,13 @@ if (cluster.isPrimary) {
         var auth = s.substring(6, s.includes(';') ? s.indexOf(';') : s.length);
         try {
           const data = helix.verifyToken(token);
-          console.log(data);
-//          var user = await GetUserById(data.userId);
-          if (ws.user = await GetUserData(data.userId))
+          if (ws.user = await GetUserData(ws, data.userId)) {
+            console.log(ws.user);
             ws.activeSession = true;
-          else
+          } else
             ws.activeSession = false;
         } catch (e) {
+          console.log(e);
           ws.activeSession = false;
         }
       }
@@ -163,66 +172,91 @@ if (cluster.isPrimary) {
       count: 0
     };
     var url = req.url.substring(1).trim().split('/');
-    console.log(url)
     if (url.length > 1) {
-      if (url[0] === 'chat' && url[1].length >= 4) {
-        ws.ownId = `${crypto.randomBytes(20).toString('hex')}`;
-        if (ws.user != null ) {
-          ws.on('message', async function nessage(data, isBin) {
-            if (ws.activeSession) ws.user = await GetUserData(ws.user.id);
-            try {
-              data = JSON.parse(data)
-              if (validate_1(data)) {
-                switch (data.type) {
-                  case "1":
-                    time = Date.now()
-                    if (time - rate.timestamp < 500) rate.count++;
-                    else rate.count = 0
-                    rate.timestamp = Date.now() + 60000; //
-                    if (rate.count > 10) {
-                      ws.send(JSON.stringify({type: "2", notification: {dialog: true, header: "Whoa there!", content: "Take a quick breather and try again in a moment — we’ve got you on a short cooldown to keep things flowing smoothly." }, restriction: 0, expiresAt: rate.timestamp }))
-                      return;
-                    }
-                    if (validate_2(data)) {
-                      wss.clients.forEach(function each(client) {
-                        if (client !== ws) {
-                          client.send(JSON.stringify({
-                              type: "2",
-                              author: ws.user,
-/*
-                            author: {
-                              type: 0,
-                              id: ws.user.id,
-                              username: ws.user.username,
-                              global_name: ws.user.global_name,
-                              avatar: ws.user.avatar,
-                              badges: [{}],
-                              colour: 0,
-                              flags: ws.user.flags
-                            },
-*/
-                              msg: MessageObject(data.msg, 0, 0)
-                            }
-                          ));
-                        }
-                      });
-                      console.log(data);
-                    } else SendError(ws, validate_2.errors[0].message);
-                    break;
-                  case "3":
-                    break;
-                  default:
-                }
-              } else SendError(ws, validate_1.errors[0].message);
-            } catch (e) {
-              ws.send(JSON.stringify({type: "err", msg: "exception"}));
-              ws.terminate(); //Not putting up with bs
-              console.log(e);
+      if (url[0] === 'chat' && url[1].length == 24) {
+        var valid = false;
+        var creator = await GetUserById(url[1]);
+        if (creator) {
+          ws.creator = creator;
+          var stream = await client.get(`ab:${creator.username}`);
+          if (stream) {
+            stream = JSON.parse(stream);
+            if (stream.endpoint.hls !== "") {
+              valid = true;
             }
+          }
+        }
+        if (!valid) {
+          ws.close();
+          return;
+        } else {
+          ws.ownId = `${crypto.randomBytes(20).toString('hex')}`;
+          var msg = {
+            type: "0",
+            msg: MessageObject(`Hallo!\nWelcome to the stream of ${ws.creator.displayName}, remember to be respectful!`, 0, 0),
+          };
+          ws.send(JSON.stringify(msg));
+          if (ws.user != null ) {
+            ws.on('message', async function nessage(data, isBin) {
+              if (ws.activeSession) ws.user = await GetUserData(ws, ws.user.id);
+              try {
+                data = JSON.parse(data)
+                if (validate_1(data)) {
+                  switch (data.type) {
+                    case "1":
+                      if (rate.count > 4) {
+                        if (Date.now() < (rate.timestamp + 60000)) {
+                          ws.send(JSON.stringify({type: "2", notification: {dialog: true, header: "Whoa there!", content: "Take a quick breather and try again in a moment — we’ve got you on a short cooldown to keep things flowing smoothly." }, restriction: 0, expiresAt: rate.timestamp+60000 }))
+                          return;
+                        } else rate.count = 0;
+                      } else {
+                        if (Date.now() - rate.timestamp < 1000) rate.count++;
+                        if (Date.now() - rate.timestamp > 3500) rate.count = 0;
+                        rate.timestamp = Date.now();
+                      }
+                      if (validate_2(data)) {
+                        var msg = {
+                          type: "2",
+                          author: ws.user,
+                          msg: MessageObject(data.msg, 0, 0),
+                          conn: ws.ownId
+                        };
+                        var response = {
+                          type: "4",
+                          response: "OK",
+                          echo: msg
+                        };
+                        client.publish(`stream_chat:${ws.creator.id}`, JSON.stringify(msg));
+                        ws.send(JSON.stringify(response));
+                      } else SendError(ws, validate_2.errors[0].message);
+                      break;
+                    case "3":
+                      break;
+                    default:
+                  }
+                } else SendError(ws, validate_1.errors[0].message);
+              } catch (e) {
+                ws.send(JSON.stringify({type: "err", msg: "exception"}));
+                ws.terminate(); //Not putting up with bs
+                console.log(e);
+              }
+            });
+            subscriber.subscribe(`user_update:${ws.user.id}`, async (message) => {
+              ws.user = await GetUserData(ws, ws.user.id);
+            });
+          }
+          subscriber.subscribe(`stream_chat:${ws.creator.id}`, async (message) => {
+            var a = JSON.parse(message);
+            if (a.conn !== ws.ownId)
+              ws.send(message);
           });
-          subscriber.subscribe(`user_update:${ws.user.id}`, async (message) => {
-            ws.user = await GetUserData(ws.user.id);
-          });
+          setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send('{"type":5}');
+            } else {
+              clearInterval(this);
+            }
+          }, 10000);
         }
       } else ws.close();
     } else {
@@ -232,4 +266,4 @@ if (cluster.isPrimary) {
     //console.log(req); req.url
     ws.on('error', console.error);
   });
-//}
+}
