@@ -21,8 +21,8 @@ if (cluster.isPrimary) {
   users.watch().on('change', async (data) => {
     console.log(data);
     const updatedData = data.updateDescription.updatedFields;
-    var deleteEntry = false;
-    var match = false;
+    let deleteEntry = false;
+    let match = false;
     Object.keys(updatedData).forEach((key) => {
       if (['banReason','deletedAt'].includes(key)) {
         deleteEntry = true;
@@ -33,13 +33,13 @@ if (cluster.isPrimary) {
       }
     });
     if (match) {
-      var key = `users:byId:${data.documentKey._id.toString()}`;
+      let key = `users:byId:${data.documentKey._id.toString()}`;
       if (await client.exists(key)) {
         if (deleteEntry) {
           client.del(key);
           console.log(`Cache for "${data.documentKey._id.toString()}" was removed because the account was flagged as deleted or banned`);
         } else {
-          var j = JSON.parse(await client.get(key));
+          let j = JSON.parse(await client.get(key));
           Object.keys(j).forEach(async (k) => {
             if (updatedData.hasOwnProperty(k)) {
               console.log(`Updating user ${data.documentKey._id.toString()}, changing "${j[k]}" to "${updatedData[k]}"`); //temp
@@ -74,12 +74,12 @@ const sleepUntil = async (id, timeoutMs) => {
 }
 
 async function getUserByName(name) {
-  var id = await client.get(`users:byName:${name}`);
+  const id = await client.get(`users:byName:${name}`);
   if (id) {
-    var x = await client.get(`users:byId:${id}`);
+    const x = await client.get(`users:byId:${id}`);
     return JSON.parse(x);
   } else {
-    var user = (await users.findOne({ 'username': name }));
+    let user = (await users.findOne({ 'username': name }));
     if (user) {
       user = user.toJSON();
       user.id = user._id.toString()
@@ -116,16 +116,16 @@ function base64UrlDecode(obj) {
 
 function HandlePOST(req) {
   return new Promise((resolve, reject) => {
-    var data = '';
+    let data = '';
     req.on("data", (chunk) => data += chunk);
     req.on("end", () => resolve(data))
   });
 }
 function VerifyHMAC(str, signature, secret) {
-  var hash = crypto.createHmac('sha256', secret)
+  const hash = crypto.createHmac('sha256', secret)
                .update(str)
                .digest('binary');
-  var string = base64UrlEncode(hash);
+  const string = base64UrlEncode(hash);
   return string === signature;
 }
 // This is NOT for user auth
@@ -177,20 +177,20 @@ async function HandleAuth(req) {
 }
 
 async function QueryStreamer(res, url) {
-  var val = url[1]; //.replace(/^[\x00-\x7F]+$/, '');
-  var stream = await client.get(`ab:${val}`);
+  const val = url[1]; //.replace(/^[\x00-\x7F]+$/, '');
+  const stream = await client.get(`ab:${val}`);
   if (stream) {
-    var endpoint = JSON.parse(stream).endpoint;
+    const endpoint = JSON.parse(stream).endpoint;
     if (endpoint.hls) {
       res.setHeader('Content-Type', 'application/json');
       res.write(stream);
       return;
     }
   } else {
-    var user = await getUserByName(val);
+    const user = await getUserByName(val);
     if (user) {
       if (user.canStream) {
-        var meta = (await vstream.findOne({ 'user_id': user.id }));
+        let meta = (await vstream.findOne({ 'user_id': user.id }));
         if (meta) {
           meta = meta.toJSON();
           delete meta.stream_key; //Prevent the key from ever showing in either the cache or the response
@@ -209,7 +209,7 @@ async function QueryStreamer(res, url) {
 }
 async function StreamKey(res, str, url) {
   try {
-    var post = JSON.parse(str);
+    const post = JSON.parse(str);
     const {data, error} = await supabase
       .from('streams')
       .select()

@@ -87,11 +87,11 @@ function MessageObject(msg, color, flags) {
 
 async function GetUserById(id) {
   try {
-    var x = await client.get(`users:byId:${id}`);
+    const x = await client.get(`users:byId:${id}`);
     if (x) {
       return JSON.parse(x);
     } else {
-      var user = (await users.findById(id));
+      let user = (await users.findById(id));
       if (user) {
         user = user.toJSON();
         user.id = user._id.toString()
@@ -113,9 +113,9 @@ console.log(e);
   return null;
 }
 async function GetUserData(ws, id) {
-  var user = await GetUserById(id);
+  const user = await GetUserById(id);
   if (user) {
-    var flags = 0;
+    let flags = 0;
     if (user.canStream) flags = setBit(flags, 1);
     if (typeof(ws.user) !== 'undefined') {
       if (ws.creator.id === ws.user.id) flags = setBit(flags, 3)
@@ -131,6 +131,28 @@ async function GetUserData(ws, id) {
     };
   } else return null;
 }
+async function CompileMessageList(creator_id) {
+  const list = await client.zRange(`chat:log:${creator_id}`, -20, -1);
+  const a = {
+    type: "6",
+    messages: []
+  };
+  list.forEach((msg) => {
+    a.messages.push(JSON.parse(msg));
+  });
+  return JSON.stringify(a);
+}
+async function CompilePunishments() {
+  
+}
+async function DeleteMessage(creator_id, message_id) {
+  const list = await client.zRange(`chat:log:${creator_id}`, 0, -1);
+  const str = list.find((s) => s.indexOf(`"id":"${message_id}"`) > 0); // id can never be at index 0 because it always starts with a bracket
+  if (str) {
+    const a = await client.zRem(`chat:log:${creator_id}`, str);
+    console.log(a);
+  } else return false;
+}
 const numCPUs = cpus().length;
 if (cluster.isPrimary) {
   console.log(`Primary ${process.pid} is running`);
@@ -145,15 +167,14 @@ if (cluster.isPrimary) {
     cluster.fork(); // Restart worker
   });
 } else {
-  var ListOfConnections = new Map();
   const wss = new WebSocketServer({ port: 8083 });
   wss.on('connection', async function connection(ws, req) {
     if (typeof(req.headers['cookie']) !== 'undefined' || true) {
-//      var temp = req.headers['cookie'];
-      var temp = "token=eyJ1c2VySWQiOiI2N2Y4N2E3ZGNmM2Q3MDlhNTYwODIzYmYiLCJyb2xlcyI6WyJhZG1pbiIsInVzZXIiXSwiZXhwIjoxNzQ1NTY1NDkzNzA1fQ.ECBajrVzkGIOh4yoYBDyV3W4Yjm6JVI3I2HvoFVZtO0;";
+//      let temp = req.headers['cookie'];
+      let temp = "token=eyJ1c2VySWQiOiI2N2Y4N2E3ZGNmM2Q3MDlhNTYwODIzYmYiLCJyb2xlcyI6WyJhZG1pbiIsInVzZXIiXSwiZXhwIjoxNzQ1NTY1NDkzNzA1fQ.ECBajrVzkGIOh4yoYBDyV3W4Yjm6JVI3I2HvoFVZtO0;";
       if (temp.includes('token=')) {
-        var s = temp.substring(temp.indexOf('token='));
-        var auth = s.substring(6, s.includes(';') ? s.indexOf(';') : s.length);
+        let s = temp.substring(temp.indexOf('token='));
+        let auth = s.substring(6, s.includes(';') ? s.indexOf(';') : s.length);
         try {
           const data = helix.verifyToken(token);
           if (ws.user = await GetUserData(ws, data.userId)) {
@@ -174,11 +195,11 @@ if (cluster.isPrimary) {
     var url = req.url.substring(1).trim().split('/');
     if (url.length > 1) {
       if (url[0] === 'chat' && url[1].length == 24) {
-        var valid = false;
-        var creator = await GetUserById(url[1]);
+        let valid = false;
+        const creator = await GetUserById(url[1]);
         if (creator) {
           ws.creator = creator;
-          var stream = await client.get(`ab:${creator.username}`);
+          const stream = await client.get(`ab:${creator.username}`);
           if (stream) {
             stream = JSON.parse(stream);
             if (stream.endpoint.hls !== "") {
@@ -191,11 +212,16 @@ if (cluster.isPrimary) {
           return;
         } else {
           ws.ownId = `${crypto.randomBytes(20).toString('hex')}`;
-          var msg = {
+          const msg = {
             type: "0",
             msg: MessageObject(`Hallo!\nWelcome to the stream of ${ws.creator.displayName}, remember to be respectful!`, 0, 0),
           };
           ws.send(JSON.stringify(msg));
+          const list = await CompileMessageList(ws.creator.id);
+          ws.send(list);
+
+          await DeleteMessage(ws.creator.id, "441d8f3455ca4775c6942bf0810c69cc");
+
           if (ws.user != null ) {
             ws.on('message', async function nessage(data, isBin) {
               if (ws.activeSession) ws.user = await GetUserData(ws, ws.user.id);
@@ -215,18 +241,20 @@ if (cluster.isPrimary) {
                         rate.timestamp = Date.now();
                       }
                       if (validate_2(data)) {
-                        var msg = {
+                        let msg = {
                           type: "2",
                           author: ws.user,
                           msg: MessageObject(data.msg, 0, 0),
                           conn: ws.ownId
                         };
-                        var response = {
+                        let response = {
                           type: "4",
                           response: "OK",
                           echo: msg
                         };
-                        client.publish(`stream_chat:${ws.creator.id}`, JSON.stringify(msg));
+                        let temp_1 = JSON.stringify(msg);
+                        await client.zAdd(`chat:log:${ws.creator.id}`, {score: Date.now(), value: temp_1});
+                        client.publish(`stream_chat:${ws.creator.id}`, temp_1);
                         ws.send(JSON.stringify(response));
                       } else SendError(ws, validate_2.errors[0].message);
                       break;
@@ -246,7 +274,7 @@ if (cluster.isPrimary) {
             });
           }
           subscriber.subscribe(`stream_chat:${ws.creator.id}`, async (message) => {
-            var a = JSON.parse(message);
+            const a = JSON.parse(message);
             if (a.conn !== ws.ownId)
               ws.send(message);
           });
