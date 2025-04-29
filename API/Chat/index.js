@@ -44,7 +44,17 @@ const clientSchema = {
       msg: {type: "string", "minLength": 1, "maxLength": 250 },
     },
     required: ["msg"],
-     additionalProperties: false
+    additionalProperties: false
+  },
+  _action: {
+    type: "object",
+    properties: {
+      type: {type: "string"},
+      ref: {type: "string"},
+      action: {type: "string"}
+    },
+//    required: ["ref","action"],
+    additionalProperties: false
   }
 }
 
@@ -59,8 +69,9 @@ const token = helix.generateToken({
 //console.log(decoded);
 
 
-const validate_1 = ajv.compile(clientSchema.main);
-const validate_2 = ajv.compile(clientSchema.message);
+var validate_1 = ajv.compile(clientSchema.main);
+var validate_2 = ajv.compile(clientSchema.message);
+var validate_3 = ajv.compile(clientSchema._action);
 
 function CloseWebsocket() {
   this.ws.Close();
@@ -71,6 +82,11 @@ function SendError(ws, msg) {
 function setBit(number, position) {
   const mask = 1 << position;
   return number | mask;
+}
+function getBit(number, position) {
+  const mask = 1 << position;
+  const bit = (number & mask) >> position;
+  return bit;
 }
 function generateRandomString(length) {
   return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
@@ -108,7 +124,6 @@ async function GetUserById(id) {
     }
   } catch (e) {
     // NO-OP
-console.log(e);
   }
   return null;
 }
@@ -145,14 +160,31 @@ async function CompileMessageList(creator_id) {
 async function CompilePunishments() {
   
 }
-async function DeleteMessage(creator_id, message_id) {
-  const list = await client.zRange(`chat:log:${creator_id}`, 0, -1);
-  const str = list.find((s) => s.indexOf(`"id":"${message_id}"`) > 0); // id can never be at index 0 because it always starts with a bracket
-  if (str) {
-    const a = await client.zRem(`chat:log:${creator_id}`, str);
-    console.log(a);
-  } else return false;
+
+async function HandleMessageAction(ws, action, ref) {
+  switch (action) {
+    case "remove":
+      if (ws.perms.message.remove) {
+        const list = await client.zRange(`chat:log:${ws.creator.id}`, 0, -1);
+        const str = list.find((s) => s.indexOf(`"id":"${ref}"`) > 0); // id can never be at index 0 because it always starts with a bracket
+        if (str) {
+          const a = await client.zRem(`chat:log:${ws.creator.id}`, str);
+          if (a == 1) {
+            const msg = {
+              type: 3,
+              ref,
+              action
+           };
+           client.publish(`stream_chat:${ws.creator.id}`, JSON.stringify(msg));
+           return true;
+          }
+        }
+      }
+      break;
+  }
+  return false;
 }
+
 const numCPUs = cpus().length;
 if (cluster.isPrimary) {
   console.log(`Primary ${process.pid} is running`);
@@ -178,7 +210,6 @@ if (cluster.isPrimary) {
         try {
           const data = helix.verifyToken(token);
           if (ws.user = await GetUserData(ws, data.userId)) {
-            console.log(ws.user);
             ws.activeSession = true;
           } else
             ws.activeSession = false;
@@ -199,11 +230,25 @@ if (cluster.isPrimary) {
         const creator = await GetUserById(url[1]);
         if (creator) {
           ws.creator = creator;
-          const stream = await client.get(`ab:${creator.username}`);
+          let stream = await client.get(`ab:${creator.username}`);
           if (stream) {
             stream = JSON.parse(stream);
             if (stream.endpoint.hls !== "") {
               valid = true;
+              const mod = stream.chat.moderators.find((obj) => obj.id === ws.creator.id );
+              if (mod) {
+                ws.perms = {
+                  message: {
+                    remove: getBit(mod.permissions, 0),
+                    highlight: getBit(mod.permissions, 1)
+                  },
+                  user: {
+                    timeout: getBit(mod.permissions, 2),
+                    ban_temp: getBit(mod.permissions, 3),
+                    ban_perm: getBit(mod.permissions, 4)
+                  }
+                };
+              }
             }
           }
         }
@@ -220,9 +265,7 @@ if (cluster.isPrimary) {
           const list = await CompileMessageList(ws.creator.id);
           ws.send(list);
 
-          await DeleteMessage(ws.creator.id, "441d8f3455ca4775c6942bf0810c69cc");
-
-          if (ws.user != null ) {
+          if (ws.user != null) {
             ws.on('message', async function nessage(data, isBin) {
               if (ws.activeSession) ws.user = await GetUserData(ws, ws.user.id);
               try {
@@ -259,8 +302,15 @@ if (cluster.isPrimary) {
                       } else SendError(ws, validate_2.errors[0].message);
                       break;
                     case "3":
+                      if (typeof(ws.perms) != 'undefined') {
+                        if (validate_3(data)) {
+                          await HandleMessageAction(ws, data.action, data.ref);
+                        } else SendError(ws, validate_3.errors[0].message);
+                      }
                       break;
                     default:
+                      ws.send(JSON.stringify({type: "err", msg: "unknown message type"}));
+                      break;
                   }
                 } else SendError(ws, validate_1.errors[0].message);
               } catch (e) {
