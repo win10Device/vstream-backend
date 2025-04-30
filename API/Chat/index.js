@@ -1,7 +1,3 @@
-/*
---- NOTE ---
-The main database is moving away from supabase
-*/
 process.env.HELIX_TOKEN_SECRET = "aaaaa";
 const config = require('./config.json');
 const { exec, execSync } = require('child_process');
@@ -51,9 +47,10 @@ const clientSchema = {
     properties: {
       type: {type: "string"},
       ref: {type: "string"},
-      action: {type: "string"}
+      action: {type: "string"},
+      reason: {type: "string"}
     },
-//    required: ["ref","action"],
+    required: ["ref","action"],
     additionalProperties: false
   }
 }
@@ -118,7 +115,7 @@ async function GetUserById(id) {
             .expire(`users:byName:${user.username}`, 6000)
             .expire(`users:byId:${user.id}`, 6000)
             .execAsPipeline()
-            .then((results) => { console.log(results) });
+            .then((results) => { /*console.log(results)*/ });
         return user;
       }
     }
@@ -130,21 +127,24 @@ async function GetUserById(id) {
 async function GetUserData(ws, id) {
   const user = await GetUserById(id);
   if (user) {
-    let flags = 0;
-    if (user.canStream) flags = setBit(flags, 1);
-    if (typeof(ws.user) !== 'undefined') {
-      if (ws.creator.id === ws.user.id) flags = setBit(flags, 3)
+    if(Boolean(user.deletedAt == null && user.banExpiration == null)) {
+      let flags = 0;
+      if (user.canStream) flags = setBit(flags, 1);
+      if (typeof(ws.user) !== 'undefined') {
+        if (ws.creator.id === ws.user.id) flags = setBit(flags, 3)
+      }
+      return {
+        type: 1,
+        id: user.id,
+        username: user.username,
+        global_name: user.displayName,
+        avatar: user.avatar,
+        badges: [],
+        flags
+      };
     }
-    return {
-      type: 1,
-      id: user.id,
-      username: user.username,
-      global_name: user.displayName,
-      avatar: user.avatar,
-      badges: [],
-      flags
-    };
-  } else return null;
+  }
+  return null;
 }
 async function CompileMessageList(creator_id) {
   const list = await client.zRange(`chat:log:${creator_id}`, -20, -1);
@@ -157,16 +157,15 @@ async function CompileMessageList(creator_id) {
   });
   return JSON.stringify(a);
 }
-async function CompilePunishments() {
-  
+async function GetMessage(creator_id, ref) {
+  const list = await client.zRange(`chat:log:${creator_id}`, 0, -1);
+  return list.find((s) => s.indexOf(`"id":"${ref}"`) > 0); // id can never be at index 0 because it always starts with a bracket
 }
-
-async function HandleMessageAction(ws, action, ref) {
+async function HandleModerationAction(ws, action, ref) {
   switch (action) {
     case "remove":
       if (ws.perms.message.remove) {
-        const list = await client.zRange(`chat:log:${ws.creator.id}`, 0, -1);
-        const str = list.find((s) => s.indexOf(`"id":"${ref}"`) > 0); // id can never be at index 0 because it always starts with a bracket
+        const str = await GetMessage(ws.creator.id, ref);
         if (str) {
           const a = await client.zRem(`chat:log:${ws.creator.id}`, str);
           if (a == 1) {
@@ -178,6 +177,20 @@ async function HandleMessageAction(ws, action, ref) {
            client.publish(`stream_chat:${ws.creator.id}`, JSON.stringify(msg));
            return true;
           }
+        }
+      }
+      break;
+    case "highlight":
+      if (ws.perms.message.highlight) {
+        const str = await GetMessage(ws.creator.id, ref);
+        if (str) {
+            const msg = {
+              type: 3,
+              ref,
+              action
+           };
+           client.publish(`stream_chat:${ws.creator.id}`, JSON.stringify(msg));
+           return true;
         }
       }
       break;
@@ -267,7 +280,14 @@ if (cluster.isPrimary) {
 
           if (ws.user != null) {
             ws.on('message', async function nessage(data, isBin) {
-              if (ws.activeSession) ws.user = await GetUserData(ws, ws.user.id);
+              if (ws.activeSession) {
+                if ((ws.user = await GetUserData(ws, ws.user.id)) == null) {
+                  ws.removeAllListeners();
+                  delete ws.user;
+                  console.log("message event was revoked from an active session because their account's permissions where removed");
+                  return;
+                }
+              }
               try {
                 data = JSON.parse(data)
                 if (validate_1(data)) {
@@ -304,7 +324,7 @@ if (cluster.isPrimary) {
                     case "3":
                       if (typeof(ws.perms) != 'undefined') {
                         if (validate_3(data)) {
-                          await HandleMessageAction(ws, data.action, data.ref);
+                          await HandleModerationAction(ws, data.action, data.ref);
                         } else SendError(ws, validate_3.errors[0].message);
                       }
                       break;
