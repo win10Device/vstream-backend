@@ -85,12 +85,9 @@ function getBit(number, position) {
   const bit = (number & mask) >> position;
   return bit;
 }
-function generateRandomString(length) {
-  return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
-}
 function MessageObject(msg, color, flags) {
   return {
-    id: generateRandomString(32),
+    id: helix.generateId(),
     timestamp: Math.floor(Date.now()/1000),
     content: msg,
     colour: color,
@@ -214,24 +211,6 @@ if (cluster.isPrimary) {
 } else {
   const wss = new WebSocketServer({ port: 8083 });
   wss.on('connection', async function connection(ws, req) {
-    if (typeof(req.headers['cookie']) !== 'undefined' || true) {
-//      let temp = req.headers['cookie'];
-      let temp = "token=eyJ1c2VySWQiOiI2N2Y4N2E3ZGNmM2Q3MDlhNTYwODIzYmYiLCJyb2xlcyI6WyJhZG1pbiIsInVzZXIiXSwiZXhwIjoxNzQ1NTY1NDkzNzA1fQ.ECBajrVzkGIOh4yoYBDyV3W4Yjm6JVI3I2HvoFVZtO0;";
-      if (temp.includes('token=')) {
-        let s = temp.substring(temp.indexOf('token='));
-        let auth = s.substring(6, s.includes(';') ? s.indexOf(';') : s.length);
-        try {
-          const data = helix.verifyToken(token);
-          if (ws.user = await GetUserData(ws, data.userId)) {
-            ws.activeSession = true;
-          } else
-            ws.activeSession = false;
-        } catch (e) {
-          console.log(e);
-          ws.activeSession = false;
-        }
-      }
-    }
     var rate = {
       timestamp: 0,
       count: 0
@@ -247,21 +226,8 @@ if (cluster.isPrimary) {
           if (stream) {
             stream = JSON.parse(stream);
             if (stream.endpoint.hls !== "") {
+              ws.mods = stream.chat.moderators;
               valid = true;
-              const mod = stream.chat.moderators.find((obj) => obj.id === ws.creator.id );
-              if (mod) {
-                ws.perms = {
-                  message: {
-                    remove: getBit(mod.permissions, 0),
-                    highlight: getBit(mod.permissions, 1)
-                  },
-                  user: {
-                    timeout: getBit(mod.permissions, 2),
-                    ban_temp: getBit(mod.permissions, 3),
-                    ban_perm: getBit(mod.permissions, 4)
-                  }
-                };
-              }
             }
           }
         }
@@ -269,6 +235,39 @@ if (cluster.isPrimary) {
           ws.close();
           return;
         } else {
+          if (typeof(req.headers['cookie']) !== 'undefined' || true) {
+            //let temp = req.headers['cookie'];
+            let temp = "token=eyJ1c2VySWQiOiI2N2Y4N2E3ZGNmM2Q3MDlhNTYwODIzYmYiLCJyb2xlcyI6WyJhZG1pbiIsInVzZXIiXSwiZXhwIjoxNzQ1NTY1NDkzNzA1fQ.ECBajrVzkGIOh4yoYBDyV3W4Yjm6JVI3I2HvoFVZtO0;";
+            if (temp.includes('token=')) {
+              let s = temp.substring(temp.indexOf('token='));
+              let auth = s.substring(6, s.includes(';') ? s.indexOf(';') : s.length);
+              try {
+                const data = helix.verifyToken(token);
+                if (ws.user = await GetUserData(ws, data.userId)) {
+                  ws.activeSession = true;
+                  const mod = ws.mods.find((obj) => obj.id === ws.user.id);
+                  if (mod) {
+                    ws.perms = {
+                      message: {
+                        remove: getBit(mod.permissions, 0),
+                        highlight: getBit(mod.permissions, 1)
+                      },
+                      user: {
+                        timeout: getBit(mod.permissions, 2),
+                        ban_temp: getBit(mod.permissions, 3),
+                        ban_perm: getBit(mod.permissions, 4)
+                      }
+                    };
+                  }
+
+                } else
+                  ws.activeSession = false;
+              } catch (e) {
+                console.log(e);
+                ws.activeSession = false;
+              }
+            }
+          }
           ws.ownId = `${crypto.randomBytes(20).toString('hex')}`;
           const msg = {
             type: "0",
@@ -356,7 +355,9 @@ if (cluster.isPrimary) {
             }
           }, 10000);
         }
-      } else ws.close();
+      } else {
+        ws.close();
+      }
     } else {
       ws.close();
       return;

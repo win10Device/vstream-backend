@@ -4,8 +4,9 @@ const mongoose = require('mongoose');
 const { createCluster, createClient } = require('redis');
 const crypto = require('node:crypto');
 const { cpus } = require('os');
-const users = require('./users.js').init(`${config.mongo.url}/${config.mongo.main}`);
-const vstream = require('./streams.js').init(`${config.mongo.url}/${config.mongo.vstream}`);
+const users = require('./schemas/users.js').init(`${config.mongo.url}/${config.mongo.main}`);
+const vstream = require('./schemas/streams.js').init(`${config.mongo.url}/${config.mongo.vstream}`);
+const servers = require('./schemas/servers.js').init(`${config.mongo.url}/${config.mongo.vstream}`);
 //var https = require('https'); //Temp
 var http = require('http');
 var cluster = require('cluster');
@@ -54,7 +55,7 @@ if (cluster.isPrimary) {
     }
   });
 }
-
+/*
 var pending = new Map();
 
 const sleepUntil = async (id, timeoutMs) => {
@@ -72,7 +73,7 @@ const sleepUntil = async (id, timeoutMs) => {
     }, 20);
   });
 }
-
+*/
 async function getUserByName(name) {
   const id = await client.get(`users:byName:${name}`);
   if (id) {
@@ -131,49 +132,29 @@ function VerifyHMAC(str, signature, secret) {
 // This is NOT for user auth
 async function HandleAuth(req) {
   return { auth: true, client: "test" }; //TEST ONLY!
+/*
   try {
-/*    if (req.headers.hasOwnProperty('authorization')) {
+    if (req.headers.hasOwnProperty('authorization')) {
       var header = req.headers['authorization'];
       var part = header.split(' ');
-      if (part.length == 2 && ['ingest', 'relays', 'service'].includes(part[0])) {
+      if (part.length == 2 && ['service'].includes(part[0])) {
         var a = part[1].split('.');
         var server_id = base64UrlDecode(a[0]);
-        /*
-           Wait for object to be removed from Map
-           This is because calling the database takes time for a token that's not been cached,
-           so if the client calls the endpoint again before it's finished processing, this ensures it waits
-        * /
-        if (pending.has(`${part[0]}_${server_id}`))
-          await sleepUntil(`${part[0]}_${server_id}`, 5000);
         var value = await client.get(`aa:${part[0]}_${server_id}`);
         if (value != null) {
-          if (VerifyHMAC(`${a[0]}.${a[1]}`, a[2], value))
-            return { auth: true, client: server_id }
-        } else {
-          pending.set(`${part[0]}_${server_id}`, null);
-          const {data, error} = await supabase
-            .from(`vstream_${part[0]}`)
-            .select()
-            .eq('id', server_id)
-            .maybeSingle();
-          if (data != null) {
-            if (VerifyHMAC(`${a[0]}.${a[1]}`, a[2], data.token.auth)) {
-              client.set(`aa:${part[0]}_${server_id}`, data.token.auth);
-              client.expire(`aa:${part[0]}_${server_id}`, 86400); //24 hours
-              console.log(`cached ${server_id}`);
-              pending.delete(`${part[0]}_${server_id}`);
-              return { auth: true, client: server_id };
-            }
+          var data = JSON.parse(value);
+          if (VerifyHMAC(`${a[0]}.${a[1]}`, a[2], data.token))
+            return { auth: true, client: data };
           }
-          pending.delete(`${part[0]}_${server_id}`);
         }
       }
-    }*/
+    }
     return { auth: false, client: null } //If nothing else returns, fail
   } catch (e) {
     console.log(e);
     return { auth: false, client: null }
   }
+*/
 }
 
 async function QueryStreamer(res, url) {
@@ -208,18 +189,15 @@ async function QueryStreamer(res, url) {
   res.writeHead(404); //If nothing else returns
 }
 async function StreamKey(res, str, url) {
+console.log(str);
   try {
     const post = JSON.parse(str);
-    const {data, error} = await supabase
-      .from('streams')
-      .select()
-      .eq('key', post.key)
-      .maybeSingle();
+    let meta = (await vstream.findOne({ 'stream_key': post.key }));
     res.setHeader('Content-Type', 'application/json');
-    if (data != null) {
-      if (data.endpoint) {
+    if (meta != null) {
+      if (meta.endpoint.hls == null) {
         res.writeHead(200);
-        res.write(JSON.stringify({url: data.user_id}));
+        res.write(JSON.stringify({url: meta.user_id}));
       } else {
         console.log("User tried to stream using a key that's already in use");
         res.writeHead(403);
@@ -247,6 +225,7 @@ async function route(req,res) {
           else res.writeHead(404);
           break;
         case 'key':
+console.log("a");
           if (req.method === 'POST') {
             const data = await HandlePOST(req);
             await StreamKey(res, data, url);
