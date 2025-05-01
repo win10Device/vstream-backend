@@ -21,8 +21,6 @@ namespace Ingest.Handlers
                         key
                     }), Encoding.UTF8,
                     "application/json");
-                    // Trailing slash is only because test api endpoint forces it,
-                    // Causing a 301 "Moved Permanently" without it - since follow redirects isn't enabled
                     var a = await Program.client.PostAsync("key/", JSONContent);
                     if (a.StatusCode == System.Net.HttpStatusCode.OK)
                     {

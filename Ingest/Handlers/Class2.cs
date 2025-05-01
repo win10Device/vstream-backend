@@ -37,8 +37,6 @@ namespace Ingest.Handlers
 
         public ValueTask OnRtmpStreamUnpublishedAsync(IEventContext context, uint clientId, string streamPath)
         {
-            //if (Program.mapTo.ContainsKey($"{clientId}"))
-            //    Program.mapTo.Remove($"{clientId}");
             if (_clientTimers.TryRemove(streamPath, out var timer))
                 timer.Dispose();
             var user = Program.server?.GetClient(clientId)?.Path.Replace("/live/",string.Empty);
