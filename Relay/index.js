@@ -111,11 +111,11 @@ http.createServer(async function (req, res) {
       const before = Date.now();
       //call endpoint
       console.log(`Querying api for "${url[0]}"`);
-      const _res = await axios.get(`${config.endpoint}/query/${url[0]}`, { validateStatus:false, headers: { 'authorization': `relays ${config.token}` }});
+      const _res = await axios.get(`${config.endpoint}/query/${url[0]}`, { validateStatus:false, headers: { 'authorization': `service ${config.token}` }});
       switch (_res.status) {
         case 200:
-          if(_res.data.endpoint!=null||_res.data.endpoint!="") {
-            const stream_url = !_res.data.test ? `https://${_res.data.endpoint}-ingest.vtubers.tv/${_res.data.user_id}` : `${_res.data.endpoint}/${_res.data.user_id}`;
+          if(_res.data.endpoint.hls!=null||_res.data.endpoint.hls!="") {
+            const stream_url = `https://${_res.data.endpoint.hls}.vtubers.tv/hls/live/${_res.data.user_id}`;
             streams.set(url[0], {
               stream: stream_url,
               chunks: new Map(),

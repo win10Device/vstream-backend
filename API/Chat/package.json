@@ -9,8 +9,11 @@
   "author": "win10Device",
   "license": "ISC",
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.4",
+    "@vtubers.tv/utils": "github:vtuberstv/node-utils",
+    "ajv": "^8.17.1",
     "axios": "^1.8.4",
-    "redis": "^4.7.0"
+    "mongoose": "^8.13.3",
+    "redis": "^4.7.0",
+    "ws": "^8.18.1"
   }
 }
