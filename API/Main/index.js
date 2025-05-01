@@ -108,12 +108,14 @@ function base64UrlDecode(obj) {
   }
   return atob(base64);
 }
-//var a = "VGxR8Bire2mWvzAW4ifthmqmXdFtbK0m";
-//var b = (Math.floor(Date.now()/1000) - 1743130420);
-//var c = `${base64UrlEncode(a)}.${base64UrlEncode(b)}`;
-//var d = base64UrlEncode(crypto.createHmac('sha256', "VGxR8Bire2mWvzAW4ifthmqmXdFtbK0m")
-//                .update(c).digest('binary'));
-//console.log(`${c}.${d}`);
+/*
+var a = "";
+var b = (Math.floor(Date.now()/1000) - 1743130420);
+var c = `${base64UrlEncode(a)}.${base64UrlEncode(b)}`;
+var d = base64UrlEncode(crypto.createHmac('sha256', "")
+                .update(c).digest('binary'));
+console.log(`${c}.${d}`);
+*/
 
 function HandlePOST(req) {
   return new Promise((resolve, reject) => {
@@ -131,8 +133,7 @@ function VerifyHMAC(str, signature, secret) {
 }
 // This is NOT for user auth
 async function HandleAuth(req) {
-  return { auth: true, client: "test" }; //TEST ONLY!
-/*
+  //return { auth: true, client: "test" }; //TEST ONLY!
   try {
     if (req.headers.hasOwnProperty('authorization')) {
       var header = req.headers['authorization'];
@@ -140,11 +141,26 @@ async function HandleAuth(req) {
       if (part.length == 2 && ['service'].includes(part[0])) {
         var a = part[1].split('.');
         var server_id = base64UrlDecode(a[0]);
-        var value = await client.get(`aa:${part[0]}_${server_id}`);
+        var value = await client.get(`aa:${server_id}`);
         if (value != null) {
           var data = JSON.parse(value);
-          if (VerifyHMAC(`${a[0]}.${a[1]}`, a[2], data.token))
+          if (VerifyHMAC(`${a[0]}.${a[1]}`, a[2], data.token)) {
             return { auth: true, client: data };
+          }
+        } else {
+          let meta = (await servers.findById(server_id));
+          if (meta) {
+            if (VerifyHMAC(`${a[0]}.${a[1]}`, a[2], meta.token)) {
+              var data = meta.toJSON();
+              data.id = data._id.toString();
+              delete data._id;
+              await client.multi()
+                .set(`aa:${data.id}`, JSON.stringify(data)) //Not an effective way to store JSON in redis
+                .expire(`aa:${data.id}`, 6000)
+                .execAsPipeline()
+                .then((results) => { console.log(results) });
+              return { auth: true, client: data };
+            }
           }
         }
       }
@@ -154,7 +170,6 @@ async function HandleAuth(req) {
     console.log(e);
     return { auth: false, client: null }
   }
-*/
 }
 
 async function QueryStreamer(res, url) {
@@ -188,29 +203,37 @@ async function QueryStreamer(res, url) {
   }
   res.writeHead(404); //If nothing else returns
 }
-async function StreamKey(res, str, url) {
-console.log(str);
-  try {
-    const post = JSON.parse(str);
-    let meta = (await vstream.findOne({ 'stream_key': post.key }));
-    res.setHeader('Content-Type', 'application/json');
-    if (meta != null) {
-      if (meta.endpoint.hls == null) {
-        res.writeHead(200);
-        res.write(JSON.stringify({url: meta.user_id}));
+
+async function StreamKeyRequest(req, res, url, client) {
+  switch (req.method) {
+    case 'POST':
+      const post = JSON.parse((await HandlePOST(req)));
+      let meta = (await vstream.findOne({ 'stream_key': post.key }));
+      res.setHeader('Content-Type', 'application/json');
+      if (meta != null) {
+        if (meta.endpoint.hls == null) {
+          await vstream.findByIdAndUpdate(meta._id, {$set: {'endpoint.hls': `${client.address}`}});
+          res.writeHead(200);
+          res.write(JSON.stringify({url: meta.user_id}));
+        } else {
+          console.log("User tried to stream using a key that's already in use");
+          res.writeHead(403);
+          res.write(JSON.stringify({msg: 'already active!'}));
+        }
       } else {
-        console.log("User tried to stream using a key that's already in use");
-        res.writeHead(403);
-        res.write(JSON.stringify({msg: 'already active!'}));
+        console.log("User tried to stream with a invalid key");
+        res.writeHead(404);
+        res.write(JSON.stringify({msg: 'key not found'}));
       }
-    } else {
-      console.log("User tried to stream with a invalid key");
-      res.writeHead(404);
-      res.write(JSON.stringify({msg: 'key not found'}));
-    }
-  } catch (e) {
-    console.log(e);
+      break;
+    case 'DELETE':
+      await vstream.findOneAndUpdate({'user_id': url[1]}, {$set: {'endpoint.hls': null}});
+      break;
+    default:
+      res.writeHead(405);
+      return;
   }
+  return;
 }
 
 async function route(req,res) {
@@ -225,11 +248,7 @@ async function route(req,res) {
           else res.writeHead(404);
           break;
         case 'key':
-console.log("a");
-          if (req.method === 'POST') {
-            const data = await HandlePOST(req);
-            await StreamKey(res, data, url);
-          } else res.writeHead(405);
+          await StreamKeyRequest(req, res, url, client);
           break;
         default:
           res.writeHead(200);

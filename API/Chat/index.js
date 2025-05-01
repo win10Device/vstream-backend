@@ -1,5 +1,5 @@
-process.env.HELIX_TOKEN_SECRET = "aaaaa";
 const config = require('./config.json');
+process.env.HELIX_TOKEN_SECRET = config.sign;
 const { exec, execSync } = require('child_process');
 const { createCluster, createClient } = require('redis');
 const crypto = require('node:crypto');
@@ -28,7 +28,7 @@ const clientSchema = {
   main: {
     type: "object",
     properties: {
-      type: {type: "string", "enum": ["1", "2", "3"]},
+      type: {type: "string", "enum": ["1", "2", "3", "4"]},
     },
     required: ["type"],
     additionalProperties: true
@@ -55,13 +55,14 @@ const clientSchema = {
   }
 }
 
-const helix = new Helix({tokenSecret: 'stellagay'});
+const helix = new Helix({tokenSecret: config.sign});
+/*
 const token = helix.generateToken({
   userId: '67f87a7dcf3d709a560823bf',
 //  email: 'lmay@vtubers.tv',
   roles: ['admin','user'],
   exp: Date.now() + 3600000
-});
+});*/
 //const decoded = Helix.decodeToken(token);
 //console.log(decoded);
 
@@ -126,10 +127,11 @@ async function GetUserData(ws, id) {
   if (user) {
     if(Boolean(user.deletedAt == null && user.banExpiration == null)) {
       let flags = 0;
-      if (user.canStream) flags = setBit(flags, 1);
       if (typeof(ws.user) !== 'undefined') {
-        if (ws.creator.id === ws.user.id) flags = setBit(flags, 3)
+        if (ws.creator.id === ws.user.id) flags = setBit(flags, 1);
+        if (ws.mods.find((obj) => obj.id === id)) flags = setBit(flags, 2);
       }
+      if (user.canStream) flags = setBit(flags, 3);
       return {
         type: 1,
         id: user.id,
@@ -166,7 +168,7 @@ async function HandleModerationAction(ws, action, ref) {
         if (str) {
           const a = await client.zRem(`chat:log:${ws.creator.id}`, str);
           if (a == 1) {
-            const msg = {
+            let msg = {
               type: 3,
               ref,
               action
@@ -181,7 +183,9 @@ async function HandleModerationAction(ws, action, ref) {
       if (ws.perms.message.highlight) {
         const str = await GetMessage(ws.creator.id, ref);
         if (str) {
-            const msg = {
+            //const _m = JSON.parse(msg);
+            //_m.msg.flags = SetBit
+            let msg = {
               type: 3,
               ref,
               action
@@ -235,14 +239,14 @@ if (cluster.isPrimary) {
           ws.close();
           return;
         } else {
-          if (typeof(req.headers['cookie']) !== 'undefined' || true) {
-            //let temp = req.headers['cookie'];
-            let temp = "token=eyJ1c2VySWQiOiI2N2Y4N2E3ZGNmM2Q3MDlhNTYwODIzYmYiLCJyb2xlcyI6WyJhZG1pbiIsInVzZXIiXSwiZXhwIjoxNzQ1NTY1NDkzNzA1fQ.ECBajrVzkGIOh4yoYBDyV3W4Yjm6JVI3I2HvoFVZtO0;";
+          if (typeof(req.headers['cookie']) !== 'undefined') {
+            let temp = req.headers['cookie'];
+            //let temp = "token=eyJ1c2VySWQiOiI2N2Y4N2E3ZGNmM2Q3MDlhNTYwODIzYmYiLCJyb2xlcyI6WyJhZG1pbiIsInVzZXIiXSwiZXhwIjoxNzQ1NTY1NDkzNzA1fQ.ECBajrVzkGIOh4yoYBDyV3W4Yjm6JVI3I2HvoFVZtO0;";
             if (temp.includes('token=')) {
               let s = temp.substring(temp.indexOf('token='));
               let auth = s.substring(6, s.includes(';') ? s.indexOf(';') : s.length);
               try {
-                const data = helix.verifyToken(token);
+                const data = helix.verifyToken(auth);
                 if (ws.user = await GetUserData(ws, data.userId)) {
                   ws.activeSession = true;
                   const mod = ws.mods.find((obj) => obj.id === ws.user.id);
@@ -269,7 +273,7 @@ if (cluster.isPrimary) {
             }
           }
           ws.ownId = `${crypto.randomBytes(20).toString('hex')}`;
-          const msg = {
+          let msg = {
             type: "0",
             msg: MessageObject(`Hallo!\nWelcome to the stream of ${ws.creator.displayName}, remember to be respectful!`, 0, 0),
           };
@@ -304,7 +308,7 @@ if (cluster.isPrimary) {
                       }
                       if (validate_2(data)) {
                         let msg = {
-                          type: "2",
+                          type: "1",
                           author: ws.user,
                           msg: MessageObject(data.msg, 0, 0),
                           conn: ws.ownId
@@ -349,7 +353,7 @@ if (cluster.isPrimary) {
           });
           setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
-              ws.send('{"type":5}');
+              ws.send('{"type":"5"}');
             } else {
               clearInterval(this);
             }
