@@ -29,9 +29,10 @@
             config = LoadConfig.GetConfig();
             client = new HttpClient()
             {
-                BaseAddress = new Uri($"http://{config.Endpoints.Main}/"),
+                //BaseAddress = new Uri($"https://{config.Endpoints.Main}/"),
+                BaseAddress = new Uri($"https://vapi.vtubers.tv/"),
             };
-            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("ingest", config.Token);
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("service", config.Token);
 
             //string configPath = Path.Combine(Directory.GetCurrentDirectory(), "config.json");
             //httpClients = new HttpClients(new Uri(config.Endpoints.API_URL), config.Token);

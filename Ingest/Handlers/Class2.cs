@@ -1,6 +1,7 @@
 ﻿using LiveStreamingServerNet.Networking.Server.Contracts;
 using LiveStreamingServerNet.Utilities.Contracts;
 using System.Collections.Concurrent;
+using System.Net.Http.Json;
 
 namespace Ingest.Handlers
 {
@@ -40,6 +41,8 @@ namespace Ingest.Handlers
             //    Program.mapTo.Remove($"{clientId}");
             if (_clientTimers.TryRemove(streamPath, out var timer))
                 timer.Dispose();
+            var user = Program.server?.GetClient(clientId)?.Path.Replace("/live/",string.Empty);
+            Program.client?.DeleteAsync($"key/{user}");
             return ValueTask.CompletedTask;
         }
         //
