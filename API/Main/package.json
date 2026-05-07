@@ -18,7 +18,7 @@
   "homepage": "https://github.com/win10Device/vstream-api#readme",
   "dependencies": {
     "dotenv": "^16.4.7",
-    "mongoose": "^8.13.2",
+    "mongoose": "^8.22.1",
     "redis": "^4.7.0"
   }
 }
